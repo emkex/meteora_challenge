@@ -7,6 +7,7 @@ from meteora_close_pos import close_position_meteora
 from settings_meteora import tokens, EXTENTION_PATH, meteora_website, jlp_usdt_page, jup_website, solscan_wallet_website, TURN_IT_ON
 
 
+print('hi')
 async def main():
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
