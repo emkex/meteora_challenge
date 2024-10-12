@@ -124,28 +124,29 @@ async def main():
 
         while True:
 
-            await asyncio.sleep(10000)
-            no_positions = met_page.locator('//*[@id="__next"]/div[1]/div[3]/div/div[2]/div/div[2]/div[2]/div[2]/div/div/div[2]/span[1]')
-            # no_positions = met_page.get_by_text('No Positions Found')
-
-            if await no_positions.inner_text() == 'No Positions Found':
-
-                print('TUDO, just open position') # Если открытая позиция не найдена - открой
-                await open_position_meteora(context, met_page)
-
-            else:
+            try:
+                # Попытка найти элемент
+                my_position_btn = met_page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/div[1]')
+                await expect(my_position_btn).to_be_enabled()
+                print("my_position_btn найден")
 
                 price_close_pos = await max_price_pool(context, met_page)
 
                 while await pool_price_check(context, met_page) < price_close_pos:
                     await asyncio.sleep(random.randint(20, 100)) # обновляю страницу раз в рандомное количество секунд
-                    await met_page.reload(wait_until='domcontentloaded')
+                    await met_page.reload(wait_until='domcontentloaded') # TROUBLE
                     print('Pool did not reach the price of max limit to reopen it')
 
                 if await pool_price_check(context, met_page) >= price_close_pos:
                     print('SUDOOOO, reopen position')
                     await close_position_meteora(context, met_page)
                     await open_position_meteora(context, met_page)
+
+            except Exception as e:
+                print("my_position_btn не найден.")
+
+                print('TUDO, just open position') # Если открытая позиция не найдена - открой
+                await open_position_meteora(context, met_page)
 
         print('main() отработал')
 
