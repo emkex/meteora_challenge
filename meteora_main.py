@@ -1,8 +1,9 @@
 import asyncio
 from playwright.async_api import async_playwright, expect
 from solflare_wallet import add_solflare_wallet
-from meteora_functions import open_position_meteora, close_position_meteora, sell_buy_jupiter
+from meteora_functions import open_position_meteora, close_position_meteora, sell_buy_jupiter, pool_price_check, max_price_pool
 from meteora_settings import tokens, EXTENTION_PATH, meteora_website, jup_website
+import random
 
 
 async def main():
@@ -101,7 +102,7 @@ async def main():
 
         needed_pair = met_page.locator('//a[@href="/dlmm/C1e2EkjmKBqx8LPYr2Moyjyvba4Kxkrkrcy5KuTEYKRH"]')
         await needed_pair.click()
-        print('Перешел во вкладку к паре JLP-USDT')
+        # print('Перешел во вкладку к паре JLP-USDT')
 
         await met_page.wait_for_load_state(state='domcontentloaded')
 
@@ -121,22 +122,32 @@ async def main():
 
         # ----------------------------- Isn't it logic ???  ---------------------------------
 
-        # Нижнюю часть (opened_position - if-else) можно зациклить (после добавления foo_price_check())
+        while True:
 
-        # Проверка наличия открытой позиции
-        opened_position = met_page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/div[1]')
+            await asyncio.sleep(10000)
+            no_positions = met_page.locator('//*[@id="__next"]/div[1]/div[3]/div/div[2]/div/div[2]/div[2]/div[2]/div/div/div[2]/span[1]')
+            # no_positions = met_page.get_by_text('No Positions Found')
 
-        if await opened_position.count() > 0:
-            # if await foo_price_check():  # # HERE must be logic regarding price 95% max in pool
-                print('SUDO')
-                await close_position_meteora(context, met_page)
+            if await no_positions.inner_text() == 'No Positions Found':
+
+                print('TUDO, just open position') # Если открытая позиция не найдена - открой
                 await open_position_meteora(context, met_page)
-        else:
-            print('TUDO') # Если открытая позиция не найдена - открой
-            await open_position_meteora(context, met_page)
+
+            else:
+
+                price_close_pos = await max_price_pool(context, met_page)
+
+                while await pool_price_check(context, met_page) < price_close_pos:
+                    await asyncio.sleep(random.randint(20, 100)) # обновляю страницу раз в рандомное количество секунд
+                    await met_page.reload(wait_until='domcontentloaded')
+                    print('Pool did not reach the price of max limit to reopen it')
+
+                if await pool_price_check(context, met_page) >= price_close_pos:
+                    print('SUDOOOO, reopen position')
+                    await close_position_meteora(context, met_page)
+                    await open_position_meteora(context, met_page)
 
         print('main() отработал')
-        await asyncio.sleep(100000)
 
         await context.close()
 

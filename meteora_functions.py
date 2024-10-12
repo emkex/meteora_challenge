@@ -1,6 +1,6 @@
 import asyncio
 from playwright.async_api import async_playwright, expect, BrowserContext, Page
-from meteora_settings import tokens, TURN_IT_ON, jlp_usdt_page
+from meteora_settings import tokens, TURN_IT_ON, jlp_usdt_page, percent_of_max
 
 
 async def open_position_meteora(context: BrowserContext, page: Page):
@@ -53,7 +53,12 @@ async def open_position_meteora(context: BrowserContext, page: Page):
     await left_border.click()
     await page.keyboard.press('Control+A')
     await page.keyboard.press('Backspace')
-    await left_border.fill('0')
+    await left_border.type('0')
+    await asyncio.sleep(2)
+
+    click = page.locator('//div[@type = "button"]').and_(page.locator('//div[@aria-controls="radix-:r0:"]')) # additional click for code to work
+    await expect(click).to_be_enabled()
+    await click.click()
 
     await asyncio.sleep(2)
 
@@ -62,20 +67,26 @@ async def open_position_meteora(context: BrowserContext, page: Page):
     await right_border.click()
     await page.keyboard.press('Control+A')
     await page.keyboard.press('Backspace')
-    await right_border.fill('3')
+    await right_border.type('3')
+
+    click = page.locator('//div[@type = "button"]').and_(page.locator('//div[@aria-controls="radix-:r0:"]')) # additional click for code to work
+    await expect(click).to_be_enabled()
+    await click.click()
 
     await asyncio.sleep(2)
 
-    left_border = page.locator('//input[@inputmode="numeric"]').nth(0)
-    await expect(left_border).to_be_enabled()
-    await left_border.click()
-
-    right_border = page.locator('//input[@inputmode="numeric"]').nth(1)
-    await expect(right_border).to_be_enabled()
-    await right_border.click()
-    await page.keyboard.press('Control+A')
-    await page.keyboard.press('Backspace')
-    await right_border.fill('3')
+    # left_price = page.locator('//input[@inputmode="decimal"]').nth(2)
+    # await expect(left_price).to_be_enabled()
+    # left_price_text = await left_price.input_value()
+    # left_price_value = float(left_price_text)
+    # print(f'Left price border: {left_price_value} USDT/JLP')
+    #
+    # right_price = page.locator('//input[@inputmode="decimal"]').nth(3)
+    # await expect(right_price).to_be_enabled()
+    # right_price_text = await right_price.input_value()
+    # right_price_value = float(right_price_text)
+    # print(right_price_value)
+    # print(f'Right price border: {right_price_value} USDT/JLP')
 
     add_liquidity_btn = page.locator('//button[@type="submit"]').filter(has_text='Add Liquidity')
     await add_liquidity_btn.scroll_into_view_if_needed()
@@ -87,6 +98,7 @@ async def open_position_meteora(context: BrowserContext, page: Page):
     await add_liquidity_btn.click()
 
     print('Ready for "Add liquidity" to pool')
+
     # -------------------- Переключение на соседнее окно -----------------------------
 
     # Отслеживаю появление нового окна
@@ -111,13 +123,16 @@ async def open_position_meteora(context: BrowserContext, page: Page):
 
     # ---------------------- Переключение на соседнее окно ---------------------------
 
+    # max_price_pool = left_price_value + percent_of_max/100 * (right_price_value - left_price_value)
+    # print(f'\nPrice when code will close position is {max_price_pool} USDT/JLP\n')
+
     await asyncio.sleep(40) # wait for confirmation of trx
 
     # Отслеживаю появление "старого" окна
     await page.bring_to_front()
     await page.wait_for_load_state(state='domcontentloaded')
 
-    return
+    # return max_price_pool # max price
 
 
 async def close_position_meteora(context: BrowserContext, page: Page):
@@ -186,8 +201,6 @@ async def close_position_meteora(context: BrowserContext, page: Page):
     # Отслеживаю появление "старого" окна
     await page.bring_to_front()
     await page.wait_for_load_state(state='domcontentloaded')
-
-    return
 
 
 async def sell_buy_jupiter(context: BrowserContext, page: Page): # page: Page
@@ -339,4 +352,40 @@ async def sell_buy_jupiter(context: BrowserContext, page: Page): # page: Page
 
     await asyncio.sleep(40) # wait for confirmation of trx
 
-    return
+
+async def pool_price_check(context: BrowserContext, page: Page):
+
+    await page.bring_to_front()
+
+    current_url = page.url  # смотрю, где я
+
+    titles = [await p.title() for p in context.pages]
+
+    if current_url != jlp_usdt_page:
+        for index, title in enumerate(titles):
+            if title == "JLP-USDT | Meteora":
+                page = context.pages[index]
+
+    pool_price = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[1]/div/div[1]/div[1]/div/div/div/div/div/div[2]/button/div[1]/span')
+    pool_price_text = await pool_price.inner_text()
+    pool_price_value = float(pool_price_text)
+    print(f'Current pool price: {pool_price_value} USDT/JLP')
+
+    return pool_price_value
+
+async def max_price_pool(context: BrowserContext, page: Page):
+
+    borders = page.locator('//*[@id="__next"]/div[1]/div[3]/div/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[1]/div/div/span')
+    await expect(borders).to_be_attached()
+    borders_text = await borders.inner_text()
+
+    left_price_value = float(borders_text.split(' - ')[0])
+    print(f'Left price border: {left_price_value} USDT/JLP')
+
+    right_price_value = float(borders_text.split(' - ')[1])
+    print(f'Right price border: {right_price_value} USDT/JLP')
+
+    price_close_pos = left_price_value + percent_of_max/100 * (right_price_value - left_price_value)
+    print(f'\nPrice when code will close position is {price_close_pos} USDT/JLP\n')
+
+    return price_close_pos # max price
