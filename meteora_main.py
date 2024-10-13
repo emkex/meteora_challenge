@@ -66,6 +66,10 @@ async def main():
             token_balances = await get_token_balances(context, jup_page)
             await swap_to_solana_jup(context, jup_page, token_balances)
 
+        await prepare_jupiter(context, jup_page)
+        token_balances = await get_token_balances(context, jup_page)
+        await swap_to_jlp_jup(context, jup_page, token_balances)
+
         # ------------------------ Isn't it logic ???  ---------------------------
 
         await met_page.bring_to_front()
@@ -79,7 +83,7 @@ async def main():
 
             if position_balance == 0:
                 # here must be double check to deny opening if there is pos
-                print('TUDOOOOoooooo, open position')
+                print('\nTUDOOOOoooooo, open position\n')
                 await open_position_meteora(context, met_page)
 
             else:
@@ -97,7 +101,7 @@ async def main():
                     await asyncio.sleep(20)  # make more elegant logic :)
                     print('Pool did not reach the price of max limit to reopen it')
 
-                print('SUDOOOOoooooo, reopen position')
+                print('\nSUDOOOOoooooo, reopen position\n')
 
                 await close_position_meteora(context, met_page)
 

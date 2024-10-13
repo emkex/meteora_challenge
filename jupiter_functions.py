@@ -1,7 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright, expect, BrowserContext, Page
 from settings import tokens, TURN_IT_ON
-from solflare_wallet import connect_wallet
+from solflare_wallet import connect_wallet_jup
 
 
 async def prepare_jupiter(context: BrowserContext, page: Page) -> None: # page: Page
@@ -10,7 +10,7 @@ async def prepare_jupiter(context: BrowserContext, page: Page) -> None: # page: 
     await page.reload()
     await page.wait_for_load_state(state='domcontentloaded')
 
-    await connect_wallet(context, page)
+    await connect_wallet_jup(context, page)
 
     swap_choose = page.locator('//*[@id="__next"]/div[2]/div[3]/div[2]/div[2]/div[1]/div[1]/a[1]')
     swap_text = await swap_choose.inner_text()
@@ -132,7 +132,7 @@ async def swap_to_solana_jup(context: BrowserContext, page: Page, token_balances
 
 async def swap_to_jlp_jup(context: BrowserContext, page: Page, token_balances: dict) -> None:
 
-    minimum_usdt = 10
+    minimum_usdt = 4
 
     if token_balances['USDT'] >= minimum_usdt:
         token_sell = tokens['USDT'] # sell max USDT
