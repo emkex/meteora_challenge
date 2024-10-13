@@ -1,9 +1,10 @@
 import asyncio
-from playwright.async_api import async_playwright, expect
+from playwright.async_api import async_playwright
 from solflare_wallet import add_solflare_wallet, connect_wallet
-from jupiter_functions import swap_jupiter
-from meteora_functions import open_position_meteora, close_position_meteora, search_pool, get_current_price, max_price_pool, tooltip_and_ratio
-from settings import tokens, EXTENTION_PATH, meteora_website, jup_website
+from jupiter_functions import prepare_jupiter, get_token_balances, swap_to_solana_jup, swap_to_jlp_jup
+from meteora_functions import open_position_meteora, close_position_meteora, solana_balance, search_pool, \
+    get_current_price, max_price_pool, tooltip_and_ratio
+from settings import EXTENTION_PATH, meteora_website, jup_website
 
 
 async def main():
@@ -48,69 +49,78 @@ async def main():
         # --------------------------- Add wallet --------------------------------
         await add_solflare_wallet(context, solflare_page)
 
-        # ------------------------  "Connect wallet" -----------------------------
+        # -----------------------  "Connect wallet" -----------------------------
         await connect_wallet(context, met_page)
 
         # -------------------------- Pair JLP-USDT -------------------------------
         await search_pool(context, met_page)
 
-        # ---------------------- DEX JUPITER OR NOT ???  -------------------------
-
-        # Поиск баланса sol на метеоре
-        balance_sol_corner = met_page.locator('//div[@class="ml-2"]').first
-        balance_sol_text = await balance_sol_corner.inner_text()
-        sol_balance_meteora = float(balance_sol_text.split(' ')[0].replace(',', '.'))
+        # --------------------------- DEX JUPITER  -------------------------------
 
         # Estimate SOL balance on meteora web
         minimum_sol = 0.08
 
-        if sol_balance_meteora < minimum_sol:
+        if await solana_balance(context, met_page) < minimum_sol:
             # Go To DEX Jupiter
-            await swap_jupiter(context, jup_page)
+            await prepare_jupiter(context, jup_page)
+            token_balances = await get_token_balances(context, jup_page)
+            await swap_to_solana_jup(context, jup_page, token_balances)
 
-        # ----------------------------- Isn't it logic ???  ---------------------------------
+        # ------------------------ Isn't it logic ???  ---------------------------
 
-        await asyncio.sleep(4)
-        await met_page.wait_for_load_state(state='domcontentloaded')
+        await met_page.bring_to_front()
 
-        position_balance = await tooltip_and_ratio(context, met_page)
+        while True:
 
-        if position_balance == 0:
-            # here must be double check to deny opening if there is pos
-            print('TUDOOOOoooooo, open position')
-            await open_position_meteora(context, met_page)
-
-        else:
-            await met_page.reload()
-            await connect_wallet(context, met_page)
-
-            await tooltip_and_ratio(context, met_page)
-
-            # here must be double check to deny opening if there is pos
-            price_close_pos = await max_price_pool(context, met_page)
-
-            while await get_current_price(context, met_page) < price_close_pos:
-                await asyncio.sleep(20) # make more elegant logic :)
-                print('Pool did not reach the price of max limit to reopen it')
-
-            # if True: # было if await get_current_price(context, met_page) >= price_close_pos:
-            print('SUDOOOOoooooo, reopen position')
-
-            await close_position_meteora(context, met_page)
-
-            await met_page.reload()
-            await connect_wallet(context, met_page)
+            await asyncio.sleep(4)
+            await met_page.wait_for_load_state(state='domcontentloaded')
 
             position_balance = await tooltip_and_ratio(context, met_page)
 
             if position_balance == 0:
                 # here must be double check to deny opening if there is pos
+                print('TUDOOOOoooooo, open position')
                 await open_position_meteora(context, met_page)
 
-        print('main() отработал')
+            else:
 
-        await asyncio.sleep(10000)
-        await context.close()
+                await met_page.reload()
+                await connect_wallet(context, met_page)
+
+                await asyncio.sleep(4)
+                await met_page.wait_for_load_state(state='domcontentloaded')
+
+                # here must be double check to deny opening if there is pos
+                price_close_pos = await max_price_pool(context, met_page)
+
+                while await get_current_price(context, met_page) < price_close_pos:
+                    await asyncio.sleep(20)  # make more elegant logic :)
+                    print('Pool did not reach the price of max limit to reopen it')
+
+                print('SUDOOOOoooooo, reopen position')
+
+                await close_position_meteora(context, met_page)
+
+                # During closing position go to DEX Jupiter
+                await prepare_jupiter(context, jup_page)
+                token_balances = await get_token_balances(context, jup_page)
+                await swap_to_jlp_jup(context, jup_page, token_balances)
+
+                await met_page.bring_to_front()
+                await asyncio.sleep(4)
+                await met_page.wait_for_load_state(state='domcontentloaded')
+
+                position_balance = await tooltip_and_ratio(context, met_page)
+
+                if position_balance == 0:
+                    # here must be double check to deny opening if there is pos
+                    await open_position_meteora(context, met_page)
+
+        # print('main() отработал')
+        #
+        # await asyncio.sleep(10000)
+        # await context.close()
+
 
 if __name__ == '__main__':
     asyncio.run(main())
