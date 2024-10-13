@@ -2,7 +2,7 @@ import asyncio
 from playwright.async_api import async_playwright, expect
 from solflare_wallet import add_solflare_wallet, connect_wallet
 from jupiter_functions import swap_jupiter
-from meteora_functions import open_position_meteora, close_position_meteora, search_pool, get_current_price, max_price_pool
+from meteora_functions import open_position_meteora, close_position_meteora, search_pool, get_current_price, max_price_pool, tooltip_and_ratio
 from settings import tokens, EXTENTION_PATH, meteora_website, jup_website
 
 
@@ -73,26 +73,7 @@ async def main():
         await asyncio.sleep(4)
         await met_page.wait_for_load_state(state='domcontentloaded')
 
-        tooltip = met_page.locator('//img[@alt="tip"]')
-
-        if await tooltip.is_visible():
-            tip_close = met_page.get_by_role('button').filter(has_text="Agree, let's go").last
-            await tip_close.click()
-            print('Toolflip was closed')
-
-        change_ratio = met_page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[1]/div/div[1]/div[1]/div/div/div/div/div/div[2]/button')
-        await expect(change_ratio).to_be_enabled()
-        change_ratio_text = await change_ratio.inner_text()
-        ratio_pair = change_ratio_text.split('\n')[1]
-
-        if ratio_pair == 'JLP/USDT':
-            await change_ratio.click()  # it must be USDT/JLP
-            print('USDT/JLP was choosed')
-
-        current_position_bal = met_page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[1]/div/div[2]/div[1]/div[2]/div[1]/div/span[2]')
-        current_position_text = await current_position_bal.inner_text()
-        position_balance = float(current_position_text.split(' ')[0])
-        print(f'Current position balance (if there is opened one): {position_balance} JLP')
+        position_balance = await tooltip_and_ratio(context, met_page)
 
         if position_balance == 0:
             # here must be double check to deny opening if there is pos
@@ -103,32 +84,28 @@ async def main():
             await met_page.reload()
             await connect_wallet(context, met_page)
 
-            tooltip = met_page.locator('//img[@alt="tip"]')
-
-            if await tooltip.is_visible():
-                tip_close = met_page.get_by_role('button').filter(has_text="Agree, let's go").last
-                await tip_close.click()
-                # print('Toolflip was closed')
-
-            change_ratio = met_page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[1]/div/div[1]/div[1]/div/div/div/div/div/div[2]/button')
-            await expect(change_ratio).to_be_enabled()
-            change_ratio_text = await change_ratio.inner_text()
-            ratio_pair = change_ratio_text.split('\n')[1]
-
-            if ratio_pair == 'JLP/USDT':
-                await change_ratio.click() # it must be USDT/JLP
+            await tooltip_and_ratio(context, met_page)
 
             # here must be double check to deny opening if there is pos
             price_close_pos = await max_price_pool(context, met_page)
 
             while await get_current_price(context, met_page) < price_close_pos:
-                await asyncio.sleep(30) # make more elegant logic :)
+                await asyncio.sleep(20) # make more elegant logic :)
                 print('Pool did not reach the price of max limit to reopen it')
 
             # if True: # было if await get_current_price(context, met_page) >= price_close_pos:
             print('SUDOOOOoooooo, reopen position')
+
             await close_position_meteora(context, met_page)
-            await open_position_meteora(context, met_page)
+
+            await met_page.reload()
+            await connect_wallet(context, met_page)
+
+            position_balance = await tooltip_and_ratio(context, met_page)
+
+            if position_balance == 0:
+                # here must be double check to deny opening if there is pos
+                await open_position_meteora(context, met_page)
 
         print('main() отработал')
 

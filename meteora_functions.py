@@ -247,6 +247,32 @@ async def max_price_pool(context: BrowserContext, page: Page) -> float:
     return price_close_pos # max price
 
 
+async def tooltip_and_ratio(context: BrowserContext, page: Page) -> float:
+    
+    tooltip = page.locator('//img[@alt="tip"]')
+
+    if await tooltip.is_visible():
+        tip_close = page.get_by_role('button').filter(has_text="Agree, let's go").last
+        await tip_close.click()
+        print('Toolflip was closed')
+
+    change_ratio = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[1]/div/div[1]/div[1]/div/div/div/div/div/div[2]/button')
+    await expect(change_ratio).to_be_enabled()
+    change_ratio_text = await change_ratio.inner_text()
+    ratio_pair = change_ratio_text.split('\n')[1]
+
+    if ratio_pair == 'JLP/USDT':
+        await change_ratio.click()  # it must be USDT/JLP
+        print('USDT/JLP was choosed')
+
+    current_position_bal = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[1]/div/div[2]/div[1]/div[2]/div[1]/div/span[2]')
+    current_position_text = await current_position_bal.inner_text()
+    position_balance = float(current_position_text.split(' ')[0])
+    print(f'Current position balance (if there is opened one): {position_balance} JLP')
+
+    return position_balance
+
+
 # async def sell_buy_jupiter(context: BrowserContext, page: Page) -> None: # page: Page
 #
 #     await page.bring_to_front()
