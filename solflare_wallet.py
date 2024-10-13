@@ -3,7 +3,7 @@ from playwright.async_api import async_playwright, expect, BrowserContext, Page
 from private_wal import SOL_PASSWORD, seedka
 
 
-async def add_solflare_wallet(context: BrowserContext, page: Page):
+async def add_solflare_wallet(context: BrowserContext, page: Page) -> None:
     
     await page.bring_to_front()
 
@@ -49,9 +49,49 @@ async def add_solflare_wallet(context: BrowserContext, page: Page):
     show_sol_btn = page.get_by_role('button').last
     await expect(show_sol_btn).to_be_enabled()
     await show_sol_btn.click()
+
+    print('Кошелек импортирован в браузер')
     
     # await page.wait_for_load_state(state='domcontentloaded')
     # balance0 = page.locator('//*[@id="root"]/div[2]/div/div[1]/div/div[1]/div[1]/div/h2/button')
     # await expect(balance0).to_be_visible()
     # why_zero = await balance0.inner_text()
     # print(f"Your balance: {why_zero}")
+
+
+async def connect_wallet(context: BrowserContext, page: Page) -> None:
+
+    await page.bring_to_front()
+    await page.wait_for_load_state(state='domcontentloaded')
+
+    connect_wal_btn = page.get_by_role('button').filter(has_text="Connect").first
+    await connect_wal_btn.click()
+    # print(f'Пробую приконнектить кошель, нажимаю "Connect wallet"')
+
+    solflare_choose = page.get_by_role('button').filter(has_text="Solflare")
+    await expect(solflare_choose).to_be_enabled()
+
+    # ожидаю открытие нового окна
+    wait_page = context.wait_for_event("page")
+
+    await solflare_choose.click()
+    # print('Выбираю коннектить Solflare')
+
+    # -------------------- Переключение на соседнее окно -----------------------------
+
+    # Отслеживаю появление нового окна
+    new_window = await wait_page
+    await new_window.bring_to_front()
+    await asyncio.sleep(3)
+    await new_window.wait_for_load_state(state='domcontentloaded')
+
+    solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[3]/div/button[2]')
+    await expect(solflare_turn_on).to_be_enabled()
+    await solflare_turn_on.click(click_count=2)
+    print(f'Кошелек привязан к сайту {page}')
+
+    # -------------------- Переключение на соседнее окно -----------------------------
+
+    # Отслеживаю появление "старого" окна
+    await page.bring_to_front()
+    await page.wait_for_load_state(state='domcontentloaded')
