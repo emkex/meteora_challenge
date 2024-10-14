@@ -139,7 +139,7 @@ async def swap_to_jlp_jup(context: BrowserContext, page: Page, token_balances: d
         token_buy = tokens['JLP']
 
     else:
-        return None
+        return
 
     # Continue
     await page.keyboard.press('Control+A')
