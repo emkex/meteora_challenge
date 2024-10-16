@@ -1,9 +1,9 @@
 import asyncio
 from playwright.async_api import async_playwright
-from solflare_wallet import add_solflare_wallet, connect_wallet
+from solflare_wallet import get_service_workers, add_solflare_wallet, connect_wallet_meteora
 from jupiter_functions import prepare_jupiter, get_token_balances, swap_to_solana_jup, swap_to_jlp_jup
 from meteora_functions import open_position_meteora, close_position_meteora, solana_balance, search_pool, \
-    get_current_price, max_price_pool, tooltip_and_ratio
+    get_current_price, max_price_pool, get_position_balance
 from settings import EXTENTION_PATH, meteora_website, jup_website
 
 
@@ -16,27 +16,31 @@ async def main():
                 f"--disable-extensions-except={EXTENTION_PATH}",
                 f"--load-extension={EXTENTION_PATH}",
             ],
-            # slow_mo=1000
+            slow_mo=350
         )
 
-        # Проверяю, есть ли загруженные воркеры для солана-кошелька
-        background = None
-        if len(context.service_workers) == 0:
-            background = await context.wait_for_event('serviceworker', timeout=60000)
-        else:
-            background = context.service_workers[0]
+        # Устанавливаем тайм-аут для всего контекста (применимо ко всем страницам)
+        context.set_default_timeout(60000)
 
-        # Добавляю JUPITER
-        page = await context.new_page()
-        await page.goto(jup_website)
+        # Проверка сервисных воркеров
+        background = await get_service_workers(context)
 
-        # Добавляю метеору
-        page = await context.new_page()
-        await page.goto(meteora_website)
+        # Функция для открытия страницы и проверки navigator.webdriver
+        async def open_page(url):
+            page = await context.new_page()
+            await page.goto(url)
+            # Проверка значения navigator.webdriver:
+            # True -> страница видит, что браузер запускается с помощью ботов;
+            # False -> не видит
+            is_webdriver = await page.evaluate("navigator.webdriver")
+            # print(f'Page at {url}, navigator.webdriver: {is_webdriver}')
+            return page
+
+        jup_page = await open_page(jup_website)
+        met_page = await open_page(meteora_website)
 
         titles = [await p.title() for p in context.pages]
-
-        print(f'Order of pages: {titles}')
+        # print(f'Order of pages: {titles}')
 
         for index, title in enumerate(titles):
             if title == "Solflare":
@@ -50,7 +54,7 @@ async def main():
         await add_solflare_wallet(context, solflare_page)
 
         # -----------------------  "Connect wallet" -----------------------------
-        await connect_wallet(context, met_page)
+        await connect_wallet_meteora(context, met_page)
 
         # -------------------------- Pair JLP-USDT -------------------------------
         await search_pool(context, met_page)
@@ -61,7 +65,7 @@ async def main():
         minimum_sol = 0.08
 
         if await solana_balance(context, met_page) < minimum_sol:
-            # Go To DEX Jupiter
+
             await prepare_jupiter(context, jup_page)
             token_balances = await get_token_balances(context, jup_page)
             await swap_to_solana_jup(context, jup_page, token_balances)
@@ -76,29 +80,21 @@ async def main():
 
         while True:
 
-            await asyncio.sleep(4)
-            await met_page.wait_for_load_state(state='domcontentloaded')
-
-            position_balance = await tooltip_and_ratio(context, met_page)
+            position_balance = await get_position_balance(context, met_page)
 
             if position_balance == 0:
-                # here must be double check to deny opening if there is pos
                 print('\nTUDOOOOoooooo, open position\n')
                 await open_position_meteora(context, met_page)
 
             else:
 
                 await met_page.reload()
-                await connect_wallet(context, met_page)
+                await connect_wallet_meteora(context, met_page)
 
-                await asyncio.sleep(4)
-                await met_page.wait_for_load_state(state='domcontentloaded')
-
-                # here must be double check to deny opening if there is pos
                 price_close_pos = await max_price_pool(context, met_page)
 
                 while await get_current_price(context, met_page) < price_close_pos:
-                    await asyncio.sleep(20)  # make more elegant logic :)
+                    await asyncio.sleep(30)  # make more elegant logic :)
                     print('Pool did not reach the price of max limit to reopen it')
 
                 print('\nSUDOOOOoooooo, reopen position\n')
@@ -108,23 +104,27 @@ async def main():
                 # During closing position go to DEX Jupiter
                 await prepare_jupiter(context, jup_page)
                 token_balances = await get_token_balances(context, jup_page)
+                await swap_to_solana_jup(context, jup_page, token_balances)
                 await swap_to_jlp_jup(context, jup_page, token_balances)
 
-                await met_page.bring_to_front()
-                await asyncio.sleep(4)
-                await met_page.wait_for_load_state(state='domcontentloaded')
-
-                position_balance = await tooltip_and_ratio(context, met_page)
+                position_balance = await get_position_balance(context, met_page)
 
                 if position_balance == 0:
-                    # here must be double check to deny opening if there is pos
                     await open_position_meteora(context, met_page)
 
         # print('main() отработал')
-        #
         # await asyncio.sleep(10000)
         # await context.close()
 
 
+async def restartable_main():
+    while True:
+        try:
+            await main()
+        except Exception as e:
+            print(f"Error occurred: {e}. Restart the script...")
+            await asyncio.sleep(5)
+
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(restartable_main())

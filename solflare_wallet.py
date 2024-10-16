@@ -1,6 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright, expect, BrowserContext, Page
 from private_wal import SOL_PASSWORD, seedka
+from settings import TURN_IT_ON
 
 
 async def add_solflare_wallet(context: BrowserContext, page: Page) -> None:
@@ -51,51 +52,88 @@ async def add_solflare_wallet(context: BrowserContext, page: Page) -> None:
     await show_sol_btn.click()
 
     print('Кошелек импортирован в браузер')
-    
-    # await page.wait_for_load_state(state='domcontentloaded')
-    # balance0 = page.locator('//*[@id="root"]/div[2]/div/div[1]/div/div[1]/div[1]/div/h2/button')
-    # await expect(balance0).to_be_visible()
-    # why_zero = await balance0.inner_text()
-    # print(f"Your balance: {why_zero}")
 
+    return None
+# ready
 
-async def connect_wallet(context: BrowserContext, page: Page) -> None:
+async def connect_wallet(context: BrowserContext, page: Page) -> bool:
+
+    await asyncio.sleep(3)
+    all_pages = context.pages
+    new_window = all_pages[-1]  # Последняя страница
+    await new_window.bring_to_front()
+    await new_window.wait_for_load_state(state='domcontentloaded')
+
+    solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[3]/div/button[2]')
+
+    try:
+        await expect(solflare_turn_on).to_be_enabled()
+        if TURN_IT_ON == 1:  # код сработает
+            await solflare_turn_on.click(click_count=2)
+            print(f'Кошелек привязан к сайту {page}')
+
+            # Отслеживаю появление "старого" окна
+            await page.bring_to_front()
+            await asyncio.sleep(3)
+            await page.wait_for_load_state(state='domcontentloaded')
+
+            return True
+
+        else:
+            print('FREEZE')
+            await asyncio.sleep(100000)
+
+    except AssertionError:
+        print(f'Кнопка была не доступна. Кошелек не подключен')
+        # Отслеживаю появление "старого" окна
+        if not new_window.is_closed() and new_window != page:
+            await new_window.close()
+        await page.bring_to_front()
+        await asyncio.sleep(5)
+
+        return False
+
+    except TimeoutError:
+        print(f'Кнопка была не доступна. Кошелек не подключен')
+        # Отслеживаю появление "старого" окна
+        if not new_window.is_closed() and new_window != page:
+            await new_window.close()
+        await page.bring_to_front()
+        await asyncio.sleep(5)
+
+        return False
+# ready
+
+async def connect_wallet_meteora(context: BrowserContext, page: Page) -> None:
 
     await page.bring_to_front()
     await page.wait_for_load_state(state='domcontentloaded')
 
     connect_wal_btn = page.get_by_role('button').filter(has_text="Connect").first
-    await connect_wal_btn.click()
+
+    # if await connect_wal_btn.is_visible():
+    await connect_wal_btn.click(click_count=2)
     # print(f'Пробую приконнектить кошель, нажимаю "Connect wallet"')
 
     solflare_choose = page.get_by_role('button').filter(has_text="Solflare")
     await expect(solflare_choose).to_be_enabled()
 
-    # ожидаю открытие нового окна
-    wait_page = context.wait_for_event("page")
-
     await solflare_choose.click()
     # print('Выбираю коннектить Solflare')
 
-    # -------------------- Переключение на соседнее окно -----------------------------
+    while not await connect_wallet(context, page):
+        print('Retry in 20 sec')
+        await asyncio.sleep(20)
+        await connect_wal_btn.click(click_count=2)
 
-    # Отслеживаю появление нового окна
-    new_window = await wait_page
-    await new_window.bring_to_front()
-    await asyncio.sleep(3)
-    await new_window.wait_for_load_state(state='domcontentloaded')
+        if await page.get_by_role('alert').nth(0).is_visible():
+            await solflare_choose.click()
 
-    solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[3]/div/button[2]')
-    await expect(solflare_turn_on).to_be_enabled()
-    await solflare_turn_on.click(click_count=2)
-    print(f'Кошелек привязан к сайту {page}')
+        else:
+            await solflare_choose.click()
 
-    # -------------------- Переключение на соседнее окно -----------------------------
-
-    # Отслеживаю появление "старого" окна
-    await page.bring_to_front()
-    await page.wait_for_load_state(state='domcontentloaded')
-
+    return None
+# ready
 
 async def connect_wallet_jup(context: BrowserContext, page: Page) -> None:
 
@@ -103,33 +141,74 @@ async def connect_wallet_jup(context: BrowserContext, page: Page) -> None:
     await page.wait_for_load_state(state='domcontentloaded')
 
     connect_wal_btn = page.get_by_role('button').filter(has_text="Connect").first
-    await connect_wal_btn.click()
+    await connect_wal_btn.click(click_count=2)
     # print(f'Пробую приконнектить кошель, нажимаю "Connect wallet"')
 
-    solflare_choose = page.locator('//img[@alt="Solflare icon"]')
+    solflare_choose = page.locator('span:has-text("Solflare")').first # '//img[@alt="Solflare icon"]'
     await expect(solflare_choose).to_be_enabled()
 
-    # ожидаю открытие нового окна
-    wait_page = context.wait_for_event("page")
-
-    await solflare_choose.click()
+    await solflare_choose.click(click_count=2)
     # print('Выбираю коннектить Solflare')
 
-    # -------------------- Переключение на соседнее окно -----------------------------
+    while not await connect_wallet(context, page):
+        print('Retry in 20 sec')
+        await asyncio.sleep(20)
+        await connect_wal_btn.click(click_count=2)
 
-    # Отслеживаю появление нового окна
-    new_window = await wait_page
-    await new_window.bring_to_front()
+        if await page.get_by_role('alert').nth(0).is_visible():
+            await solflare_choose.click()
+
+        else:
+            await solflare_choose.click()
+
+    return None
+# ready
+
+async def confirm_transaction(context: BrowserContext, page: Page) -> bool:
+
     await asyncio.sleep(3)
+    all_pages = context.pages
+    new_window = all_pages[-1]  # Последняя страница
+    await new_window.bring_to_front()
     await new_window.wait_for_load_state(state='domcontentloaded')
 
-    solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[3]/div/button[2]')
-    await expect(solflare_turn_on).to_be_enabled()
-    await solflare_turn_on.click(click_count=2)
-    print(f'Кошелек привязан к сайту {page}')
+    solflare_approve = new_window.locator('button:has-text("Утвердить")')
 
-    # -------------------- Переключение на соседнее окно -----------------------------
+    try:
+        await expect(solflare_approve).to_be_enabled()
+        if TURN_IT_ON == 1:
+            await solflare_approve.click(click_count=2)
+            print('Подтверждаю и... ОДОБРЯЮ транзакцию!')
 
-    # Отслеживаю появление "старого" окна
-    await page.bring_to_front()
-    await page.wait_for_load_state(state='domcontentloaded')
+            return True
+
+        else:
+            print('FREEZE')
+            await asyncio.sleep(100000)
+
+    except AssertionError:
+        print(f'Транзакция отклонена. Причина: кнопка была не доступна ')
+        # Отслеживаю появление "старого" окна
+        if not new_window.is_closed() and new_window != page:
+            await new_window.close()
+        await page.bring_to_front()
+        await asyncio.sleep(5)
+
+        return False
+
+    except TimeoutError:
+        print(f'Транзакция отклонена. Причина: кнопка была не доступна ')
+        # Отслеживаю появление "старого" окна
+        if not new_window.is_closed() and new_window != page:
+            await new_window.close()
+        await page.bring_to_front()
+        await asyncio.sleep(5)
+
+        return False
+# ready
+
+async def get_service_workers(context) -> None:
+    if len(context.service_workers) == 0:
+        return await context.wait_for_event('serviceworker', timeout=60000)
+    return context.service_workers[0]
+# ready

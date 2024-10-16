@@ -1,10 +1,10 @@
 import asyncio
 from playwright.async_api import async_playwright, expect, BrowserContext, Page
-from settings import tokens, TURN_IT_ON
-from solflare_wallet import connect_wallet_jup
+from solflare_wallet import connect_wallet_jup, confirm_transaction
+from settings import tokens
 
 
-async def prepare_jupiter(context: BrowserContext, page: Page) -> None: # page: Page
+async def prepare_jupiter(context: BrowserContext, page: Page) -> None:
 
     await page.bring_to_front()
     await page.reload()
@@ -19,8 +19,10 @@ async def prepare_jupiter(context: BrowserContext, page: Page) -> None: # page: 
         await swap_choose.click()
         print("Push on mode 'SWAP' even if it's pushed")
 
+    return None
+# ready
 
-async def get_token_balances(context: BrowserContext, page: Page) -> dict:  # page: Page
+async def get_token_balances(context: BrowserContext, page: Page) -> dict:
 
     # выбираю токен из стопки
     token_to_sell = page.locator('//*[@id="__next"]/div[2]/div[3]/div[2]/div[2]/div[2]/div[2]/form/div[1]/div[1]/div[2]/div/button')
@@ -36,15 +38,25 @@ async def get_token_balances(context: BrowserContext, page: Page) -> dict:  # pa
 
         await page.keyboard.insert_text(tokens[token]['token_contract'])
 
+        # Locator for the token amount
         token_amount = page.locator('//*[@id="__next"]/div[3]/div[1]/div/div/div[4]/div/div/div/li/div[2]/div[3]/span')
-        await expect(token_amount).to_be_visible()
-        token_amount_text = await token_amount.inner_text()
-        token_balances[token] = float(token_amount_text.replace(',', '.'))
+
+        try:
+            # Try to wait for the element to be visible within 5 seconds
+            await expect(token_amount).to_be_visible(timeout=5000)
+
+            # Get the text if the element is found
+            token_amount_text = await token_amount.inner_text()
+            token_balances[token] = float(token_amount_text.replace(',', '.'))
+
+        except:
+            # If the element is not found within 5 seconds, set the balance to 0
+            token_balances[token] = 0
 
     print('\n', token_balances, '\n')
 
     return token_balances
-
+# ready (change balance source when time will be)
 
 async def swap_to_solana_jup(context: BrowserContext, page: Page, token_balances: dict) -> None:
 
@@ -67,6 +79,9 @@ async def swap_to_solana_jup(context: BrowserContext, page: Page, token_balances
         else:
             print('You do not have enough SOL, USDT and JLP')
             await asyncio.sleep(100000) # send me TG warning
+
+    else:
+        return
 
     # Continue
     await page.keyboard.press('Control+A')
@@ -97,38 +112,21 @@ async def swap_to_solana_jup(context: BrowserContext, page: Page, token_balances
     await swap_btn.scroll_into_view_if_needed()
     await expect(swap_btn).to_be_enabled()
 
-    # ожидаю открытие нового окна
-    wait_page = context.wait_for_event("page")
-
     await swap_btn.click()
 
     print(f'Ready for "SWAPchik" of {token_insert_name1} to {token_insert_name2}')
-    # -------------------- Переключение на соседнее окно -----------------------------
 
-    # Отслеживаю появление нового окна
-    new_window = await wait_page
-    await new_window.bring_to_front()
-    await asyncio.sleep(3)
-    await new_window.wait_for_load_state(state='domcontentloaded')
+    while not await confirm_transaction(context, page):
+        print('Retry in 20 sec')
+        await asyncio.sleep(20)
+        await swap_btn.click()
 
-    try:
-        solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[2]/div/div[2]/div[2]/div[2]/button[2]').or_(new_window.get_by_role('button').last)
-        await expect(solflare_turn_on).to_be_enabled()
+    await asyncio.sleep(40)  # wait for confirmation of trx
 
-        if TURN_IT_ON == 1:  # код сработает
-            await solflare_turn_on.click(click_count=2)
-            print('Подтверждаю и... ОДОБРЯЮ!\n')
-        else:
-            print('FREEZE')
-            await asyncio.sleep(100000)
-
-    except Exception as e:
-        print(f'Что-то пошло не так: {e}, ожидаем...')
-
-    # -------------------- Переключение на соседнее окно -----------------------------
-
-    await asyncio.sleep(40) # wait for confirmation of trx
-
+    # Отслеживаю появление "старого" окна
+    await page.bring_to_front()
+    await page.wait_for_load_state(state='domcontentloaded')
+# ready
 
 async def swap_to_jlp_jup(context: BrowserContext, page: Page, token_balances: dict) -> None:
 
@@ -171,34 +169,18 @@ async def swap_to_jlp_jup(context: BrowserContext, page: Page, token_balances: d
     await swap_btn.scroll_into_view_if_needed()
     await expect(swap_btn).to_be_enabled()
 
-    # ожидаю открытие нового окна
-    wait_page = context.wait_for_event("page")
-
     await swap_btn.click()
 
     print(f'Ready for "SWAPchik" of {token_insert_name1} to {token_insert_name2}')
-    # -------------------- Переключение на соседнее окно -----------------------------
 
-    # Отслеживаю появление нового окна
-    new_window = await wait_page
-    await new_window.bring_to_front()
-    await asyncio.sleep(3)
-    await new_window.wait_for_load_state(state='domcontentloaded')
+    while not await confirm_transaction(context, page):
+        print('Retry in 20 sec')
+        await asyncio.sleep(20)
+        await swap_btn.click()
 
-    try:
-        solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[2]/div/div[2]/div[2]/div[2]/button[2]').or_(new_window.get_by_role('button').last)
-        await expect(solflare_turn_on).to_be_enabled()
+    await asyncio.sleep(40)  # wait for confirmation of trx
 
-        if TURN_IT_ON == 1:  # код сработает
-            await solflare_turn_on.click(click_count=2)
-            print('Подтверждаю и... ОДОБРЯЮ!\n')
-        else:
-            print('FREEZE')
-            await asyncio.sleep(100000)
-
-    except Exception as e:
-        print(f'Что-то пошло не так: {e}, ожидаем...')
-
-    # -------------------- Переключение на соседнее окно -----------------------------
-
-    await asyncio.sleep(40) # wait for confirmation of trx
+    # Отслеживаю появление "старого" окна
+    await page.bring_to_front()
+    await page.wait_for_load_state(state='domcontentloaded')
+# ready
