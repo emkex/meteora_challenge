@@ -36,8 +36,8 @@ minimum_sol = 0.08 # for fees of bchain
 minimum_usdt = 4 # for swap USDT to JLP
 
 # for opening position
-open_min_percent = 0
-open_max_percent = 2.75
+open_min_percent = '0'
+open_max_percent = '2.75'
 
 # for closing position
 percent_of_max = 15

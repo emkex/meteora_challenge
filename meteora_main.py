@@ -75,6 +75,8 @@ async def main():
         # ------------------------ Isn't it logic ???  ---------------------------
 
         await met_page.bring_to_front()
+        await met_page.reload()
+        await connect_wallet_meteora(context, met_page)
 
         while True:
 
@@ -119,7 +121,7 @@ async def main():
 
                 price_close_pos_2 = await min_price_pool(context, met_page)                 # TEST-DRIVE ONLY
                 current_price = await get_current_price(context, met_page)                  # TEST-DRIVE ONLY
-                while current_price < price_close_pos or current_price > price_close_pos_2: # TEST-DRIVE ONLY
+                while current_price < price_close_pos and current_price > price_close_pos_2: # TEST-DRIVE ONLY
                     await asyncio.sleep(30)                                                 # TEST-DRIVE ONLY
                     print('Pool did not reach the price of max limit to reopen it')         # TEST-DRIVE ONLY
                     current_price = await get_current_price(context, met_page)              # TEST-DRIVE ONLY

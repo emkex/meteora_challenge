@@ -62,6 +62,7 @@ async def connect_wallet(context: BrowserContext, page: Page) -> bool:
     all_pages = context.pages
     new_window = all_pages[-1]  # Последняя страница
     await new_window.bring_to_front()
+    await new_window.reload()
     await new_window.wait_for_load_state(state='domcontentloaded')
 
     solflare_turn_on = new_window.locator('//body/div[2]/div[2]/div/div[3]/div/button[2]')
@@ -86,8 +87,8 @@ async def connect_wallet(context: BrowserContext, page: Page) -> bool:
     except AssertionError:
         print(f'Кнопка была не доступна. Кошелек не подключен')
         # Отслеживаю появление "старого" окна
-        if not new_window.is_closed() and new_window != page:
-            await new_window.close()
+        # if not new_window.is_closed() and new_window != page:
+        #     await new_window.close()
         await page.bring_to_front()
         await asyncio.sleep(5)
 
@@ -96,8 +97,8 @@ async def connect_wallet(context: BrowserContext, page: Page) -> bool:
     except TimeoutError:
         print(f'Кнопка была не доступна. Кошелек не подключен')
         # Отслеживаю появление "старого" окна
-        if not new_window.is_closed() and new_window != page:
-            await new_window.close()
+        # if not new_window.is_closed() and new_window != page:
+        #     await new_window.close()
         await page.bring_to_front()
         await asyncio.sleep(5)
 
@@ -109,7 +110,7 @@ async def connect_wallet_meteora(context: BrowserContext, page: Page) -> None:
     await page.bring_to_front()
     await page.wait_for_load_state(state='domcontentloaded')
 
-    connect_wal_btn = page.get_by_role('button').filter(has_text="Connect").first
+    connect_wal_btn = page.get_by_role('button').filter(has_text="Connect Wallet").first
 
     # if await connect_wal_btn.is_visible():
     await connect_wal_btn.click(click_count=2)
@@ -124,12 +125,12 @@ async def connect_wallet_meteora(context: BrowserContext, page: Page) -> None:
     while not await connect_wallet(context, page):
         print('Retry in 20 sec')
         await asyncio.sleep(20)
-        await connect_wal_btn.click(click_count=2)
-
-        if await page.get_by_role('alert').nth(0).is_visible():
+        connecting_btn = page.get_by_role('button').filter(has_text="Connecting").first
+        if await connecting_btn.is_visible():
+            await connecting_btn.click(click_count=2)
             await solflare_choose.click()
-
         else:
+            await connect_wal_btn.click(click_count=2)
             await solflare_choose.click()
 
     return None
@@ -140,7 +141,7 @@ async def connect_wallet_jup(context: BrowserContext, page: Page) -> None:
     await page.bring_to_front()
     await page.wait_for_load_state(state='domcontentloaded')
 
-    connect_wal_btn = page.get_by_role('button').filter(has_text="Connect").first
+    connect_wal_btn = page.get_by_role('button').filter(has_text="Connect Wallet").first
     await connect_wal_btn.click(click_count=2)
     # print(f'Пробую приконнектить кошель, нажимаю "Connect wallet"')
 
@@ -153,12 +154,12 @@ async def connect_wallet_jup(context: BrowserContext, page: Page) -> None:
     while not await connect_wallet(context, page):
         print('Retry in 20 sec')
         await asyncio.sleep(20)
-        await connect_wal_btn.click(click_count=2)
-
-        if await page.get_by_role('alert').nth(0).is_visible():
+        connecting_btn = page.get_by_role('button').filter(has_text="Connecting").first
+        if await connecting_btn.is_visible():
+            await connecting_btn.click(click_count=2)
             await solflare_choose.click()
-
         else:
+            await connect_wal_btn.click(click_count=2)
             await solflare_choose.click()
 
     return None
@@ -170,6 +171,7 @@ async def confirm_transaction(context: BrowserContext, page: Page) -> bool:
     all_pages = context.pages
     new_window = all_pages[-1]  # Последняя страница
     await new_window.bring_to_front()
+    await new_window.reload()
     await new_window.wait_for_load_state(state='domcontentloaded')
 
     solflare_approve = new_window.locator('button:has-text("Утвердить")')
@@ -189,8 +191,8 @@ async def confirm_transaction(context: BrowserContext, page: Page) -> bool:
     except AssertionError:
         print(f'Транзакция отклонена. Причина: кнопка была не доступна ')
         # Отслеживаю появление "старого" окна
-        if not new_window.is_closed() and new_window != page:
-            await new_window.close()
+        # if not new_window.is_closed() and new_window != page:
+        #     await new_window.close()
         await page.bring_to_front()
         await asyncio.sleep(5)
 
@@ -199,8 +201,8 @@ async def confirm_transaction(context: BrowserContext, page: Page) -> bool:
     except TimeoutError:
         print(f'Транзакция отклонена. Причина: кнопка была не доступна ')
         # Отслеживаю появление "старого" окна
-        if not new_window.is_closed() and new_window != page:
-            await new_window.close()
+        # if not new_window.is_closed() and new_window != page:
+        #     await new_window.close()
         await page.bring_to_front()
         await asyncio.sleep(5)
 

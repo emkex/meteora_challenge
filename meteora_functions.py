@@ -124,15 +124,7 @@ async def open_position_meteora(context: BrowserContext, page: Page) -> None:
     while not await confirm_transaction(context, page):
         print('Retry in 20 sec')
         await asyncio.sleep(20)
-        # await withdraw_btn.click()
-        if await page.get_by_role('alert').nth(0).is_visible():
-            await add_liquidity_btn.click()
-            # if await confirm_transaction(context):
-            #     break
-        else:
-            await add_liquidity_btn.click()
-            # if await confirm_transaction(context):
-            #     break
+        await add_liquidity_btn.click()
 
     await asyncio.sleep(40) # wait for confirmation of trx
 
