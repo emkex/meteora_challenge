@@ -1,6 +1,6 @@
 import asyncio
 from playwright.async_api import async_playwright, expect, BrowserContext, Page
-from settings import tokens, TURN_IT_ON, jlp_usdt_page, percent_of_max
+from settings import tokens, TURN_IT_ON, jlp_usdt_page, percent_of_max, percent_of_min, open_min_percent, open_max_percent
 from solflare_wallet import confirm_transaction
 
 
@@ -27,12 +27,11 @@ async def search_pool(context: BrowserContext, page: Page) -> None:
     await page.wait_for_load_state(state='domcontentloaded')
     print('Перешел во вкладку к паре JLP-USDT')
 
-    if await page.locator('button:has-text("Agree, let\'s go")').nth(1).is_visible(): # T (del)
-        await page.locator('button:has-text("Agree, let\'s go")').nth(1).click()
-        print('gang')
+    # if await page.locator('button:has-text("Agree, let\'s go")').nth(1).is_visible():
+    #     await page.locator('button:has-text("Agree, let\'s go")').nth(1).click()
 
     return None
-# Change to jlp-usdt + 1 del ! if needed (ready)
+# Change to jlp-usdt + 1 del ! if needed (in general ready)
     
 async def solana_balance(context: BrowserContext, page: Page) -> float:
     # Поиск баланса sol на метеоре
@@ -95,7 +94,7 @@ async def open_position_meteora(context: BrowserContext, page: Page) -> None:
     await left_border.click()
     await page.keyboard.press('Control+A')
     await page.keyboard.press('Backspace')
-    await left_border.type('0')
+    await left_border.type(open_min_percent)
 
     click = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/form/div[3]/div[2]/div/div[4]/div[1]/div[1]/div[2]') # additional click for code to work
     await expect(click).to_be_enabled()
@@ -107,7 +106,7 @@ async def open_position_meteora(context: BrowserContext, page: Page) -> None:
     await right_border.click()
     await page.keyboard.press('Control+A')
     await page.keyboard.press('Backspace')
-    await right_border.type('3')
+    await right_border.type(open_max_percent)
 
     click = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/form/div[3]/div[2]/div/div[4]/div[1]/div[1]/div[2]') # additional click for code to work
     await expect(click).to_be_enabled()
@@ -168,30 +167,49 @@ async def close_position_meteora(context: BrowserContext, page: Page) -> None:
     await expect(my_position_btn).to_be_enabled()
     await my_position_btn.click()
 
-    withdraw_btn = page.locator('//div[text() = "Withdraw"]')
-    await expect(withdraw_btn).to_be_enabled()
-    await withdraw_btn.click()
-
-    withdraw_and_close_btn = page.locator('//button[@type="submit"]').filter(has_text='Withdraw & Close Position')
-    await withdraw_and_close_btn.scroll_into_view_if_needed()
-    await expect(withdraw_and_close_btn).to_be_enabled()
-
-    await withdraw_and_close_btn.click()
-
-    print('Ready for "Withdraw & Close Position"')
-
-    while not await confirm_transaction(context, page): # T
-        print('Retry in 20 sec')
-        await asyncio.sleep(20)
+    try:
+        withdraw_btn = page.locator('//div[text() = "Withdraw"]')
+        await expect(withdraw_btn).to_be_enabled()
         await withdraw_btn.click()
-        if await page.get_by_role('alert').nth(0).is_visible():
-            await withdraw_and_close_btn.click()
-            # if await confirm_transaction(context):
-            #     break
-        else:
-            await withdraw_and_close_btn.click()
-            # if await confirm_transaction(context):
-            #     break
+
+        withdraw_and_close_btn = page.locator('//button[@type="submit"]').filter(has_text='Withdraw & Close Position')
+        await withdraw_and_close_btn.scroll_into_view_if_needed()
+        await expect(withdraw_and_close_btn).to_be_enabled()
+
+        await withdraw_and_close_btn.click()
+
+        print('Ready for "Withdraw & Close Position"')
+
+        while not await confirm_transaction(context, page):
+            print('Retry in 20 sec')
+            await asyncio.sleep(20)
+            await withdraw_btn.click()
+
+            if await page.get_by_role('alert').nth(0).is_visible():
+                await withdraw_and_close_btn.click()
+
+            else:
+                await withdraw_and_close_btn.click()
+
+
+    except AssertionError:
+        print(f'Just close position')
+        close_btn = page.locator('button:has-text("Close Position")')
+        await expect(close_btn).to_be_enabled()
+        await close_btn.click()
+
+        print('Ready for "Close Position"')
+
+        while not await confirm_transaction(context, page):
+            print('Retry in 20 sec')
+            await asyncio.sleep(20)
+
+            if await page.get_by_role('alert').nth(0).is_visible():
+                await close_btn.click()
+
+            else:
+                await close_btn.click()
+
 
     await asyncio.sleep(40) # wait for confirmation of trx
 
@@ -219,27 +237,6 @@ async def get_current_price(context: BrowserContext, page: Page) -> float:
     print(f'Current pool price: {current_price} USDT/JLP')
 
     return current_price
-# ready
-
-async def max_price_pool(context: BrowserContext, page: Page) -> float:
-
-    await asyncio.sleep(3)
-    await page.wait_for_load_state(state='domcontentloaded')
-
-    borders = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[1]/div/div/span')
-    await expect(borders).to_be_attached()
-    borders_text = await borders.inner_text()
-
-    left_price_value = float(borders_text.split(' - ')[0])
-    print(f'Left price border: {left_price_value} USDT/JLP')
-
-    right_price_value = float(borders_text.split(' - ')[1])
-    print(f'Right price border: {right_price_value} USDT/JLP')
-
-    price_close_pos = left_price_value + percent_of_max/100 * (right_price_value - left_price_value)
-    print(f'\nPrice when code will close position is {price_close_pos} USDT/JLP\n')
-
-    return price_close_pos # max price
 # ready
 
 async def get_position_balance(context: BrowserContext, page: Page) -> float:
@@ -290,4 +287,64 @@ async def get_position_balance(context: BrowserContext, page: Page) -> float:
     print(f'Current position balance: {position_balance} JLP')
 
     return position_balance
-# warn + connecting are commented as I didn't come across with that yet (ready)
+# (warn + connecting...) are commented as I didn't come across with that yet (almost ready)
+
+async def max_price_pool(context: BrowserContext, page: Page) -> float | bool:
+
+    await asyncio.sleep(3)
+    await page.wait_for_load_state(state='domcontentloaded')
+
+    borders = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[1]/div/div/span')
+
+    try:
+
+        await expect(borders.last).to_be_attached()
+        borders_text = await borders.inner_text()
+
+        left_price_value = float(borders_text.split(' - ')[0])
+        print(f'\nLeft price border: {left_price_value} USDT/JLP')
+
+        right_price_value = float(borders_text.split(' - ')[1])
+        print(f'Right price border: {right_price_value} USDT/JLP')
+
+        price_close_pos = left_price_value + percent_of_max/100 * (right_price_value - left_price_value)
+        print(f'\nPrice when code will close position is {price_close_pos} USDT/JLP')
+
+        return price_close_pos # max price
+
+    except AssertionError:
+
+        print(f'Позиция не была найдена.')
+
+        return False
+# ready
+
+async def min_price_pool(context: BrowserContext, page: Page) -> float | bool:
+
+    await asyncio.sleep(3)
+    await page.wait_for_load_state(state='domcontentloaded')
+
+    borders = page.locator('//*[@id="__next"]/div[1]/div[5]/div/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[1]/div/div/span')
+
+    try:
+
+        await expect(borders.last).to_be_attached()
+        borders_text = await borders.inner_text()
+
+        left_price_value = float(borders_text.split(' - ')[0])
+        # print(f'\nLeft price border: {left_price_value} USDT/JLP')
+
+        right_price_value = float(borders_text.split(' - ')[1])
+        # print(f'Right price border: {right_price_value} USDT/JLP')
+
+        price_close_pos_2 = left_price_value - percent_of_min/100 * (right_price_value - left_price_value)
+        print(f'Price when code will close position is also {price_close_pos_2} USDT/JLP (TEST-DRIVE)\n')
+
+        return price_close_pos_2 # min price
+
+    except AssertionError:
+
+        print(f'Позиция не была найдена.')
+
+        return False
+# ONLY FOR TESTS

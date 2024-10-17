@@ -1,7 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright, expect, BrowserContext, Page
 from solflare_wallet import connect_wallet_jup, confirm_transaction
-from settings import tokens
+from settings import tokens, minimum_sol, minimum_usdt
 
 
 async def prepare_jupiter(context: BrowserContext, page: Page) -> None:
@@ -56,11 +56,9 @@ async def get_token_balances(context: BrowserContext, page: Page) -> dict:
     print('\n', token_balances, '\n')
 
     return token_balances
-# ready (change balance source when time will be)
+# in general ready (change balance source when time will be)
 
 async def swap_to_solana_jup(context: BrowserContext, page: Page, token_balances: dict) -> None:
-
-    minimum_sol = 0.08
 
     if token_balances['SOL'] < minimum_sol:
 
@@ -129,8 +127,6 @@ async def swap_to_solana_jup(context: BrowserContext, page: Page, token_balances
 # ready
 
 async def swap_to_jlp_jup(context: BrowserContext, page: Page, token_balances: dict) -> None:
-
-    minimum_usdt = 4
 
     if token_balances['USDT'] >= minimum_usdt:
         token_sell = tokens['USDT'] # sell max USDT

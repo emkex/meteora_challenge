@@ -3,8 +3,8 @@ from playwright.async_api import async_playwright
 from solflare_wallet import get_service_workers, add_solflare_wallet, connect_wallet_meteora
 from jupiter_functions import prepare_jupiter, get_token_balances, swap_to_solana_jup, swap_to_jlp_jup
 from meteora_functions import open_position_meteora, close_position_meteora, solana_balance, search_pool, \
-    get_current_price, max_price_pool, get_position_balance
-from settings import EXTENTION_PATH, meteora_website, jup_website
+    get_current_price, max_price_pool, get_position_balance, min_price_pool
+from settings import get_latest_extension_path, meteora_website, jup_website, minimum_sol
 
 
 async def main():
@@ -13,8 +13,8 @@ async def main():
             user_data_dir='',
             headless=False,
             args=[
-                f"--disable-extensions-except={EXTENTION_PATH}",
-                f"--load-extension={EXTENTION_PATH}",
+                f"--disable-extensions-except={get_latest_extension_path()}",
+                f"--load-extension={get_latest_extension_path()}",
             ],
             slow_mo=350
         )
@@ -61,9 +61,7 @@ async def main():
 
         # --------------------------- DEX JUPITER  -------------------------------
 
-        # Estimate SOL balance on meteora web
-        minimum_sol = 0.08
-
+        # Estimate SOL balance on meteora
         if await solana_balance(context, met_page) < minimum_sol:
 
             await prepare_jupiter(context, jup_page)
@@ -80,11 +78,37 @@ async def main():
 
         while True:
 
-            position_balance = await get_position_balance(context, met_page)
+            position_balance = await get_position_balance(context, met_page) # first check of position
+
+            price_close_pos = await max_price_pool(context, met_page) # second check of position
 
             if position_balance == 0:
-                print('\nTUDOOOOoooooo, open position\n')
-                await open_position_meteora(context, met_page)
+
+                if price_close_pos == False:
+                    print('\nTUDOOOOoooooo, open position\n')
+
+                    await open_position_meteora(context, met_page)
+
+                elif isinstance(price_close_pos, float):
+
+                    await met_page.reload()
+                    await connect_wallet_meteora(context, met_page)
+
+                    if isinstance(max_price_pool(context, met_page), float) and await get_position_balance(context, met_page) == 0: # double-check that there is not closed EMPTY pos
+                        print('\nStrange thing, close it (error on the meteora)\n')
+
+                        await close_position_meteora(context, met_page)
+
+                        # During closing position go to DEX Jupiter
+                        await prepare_jupiter(context, jup_page)
+                        token_balances = await get_token_balances(context, jup_page)
+                        await swap_to_solana_jup(context, jup_page, token_balances)
+                        await swap_to_jlp_jup(context, jup_page, token_balances)
+
+                        position_balance = await get_position_balance(context, met_page)
+
+                        if position_balance == 0:
+                            await open_position_meteora(context, met_page)
 
             else:
 
@@ -93,9 +117,16 @@ async def main():
 
                 price_close_pos = await max_price_pool(context, met_page)
 
-                while await get_current_price(context, met_page) < price_close_pos:
-                    await asyncio.sleep(30)  # make more elegant logic :)
-                    print('Pool did not reach the price of max limit to reopen it')
+                price_close_pos_2 = await min_price_pool(context, met_page)                 # TEST-DRIVE ONLY
+                current_price = await get_current_price(context, met_page)                  # TEST-DRIVE ONLY
+                while current_price < price_close_pos or current_price > price_close_pos_2: # TEST-DRIVE ONLY
+                    await asyncio.sleep(30)                                                 # TEST-DRIVE ONLY
+                    print('Pool did not reach the price of max limit to reopen it')         # TEST-DRIVE ONLY
+                    current_price = await get_current_price(context, met_page)              # TEST-DRIVE ONLY
+
+                # while await get_current_price(context, met_page) < price_close_pos:         # CLOSE IF TEST-DRIVE
+                #     await asyncio.sleep(30)  # make more elegant logic :)                   # CLOSE IF TEST-DRIVE
+                #     print('Pool did not reach the price of max limit to reopen it')         # CLOSE IF TEST-DRIVE
 
                 print('\nSUDOOOOoooooo, reopen position\n')
 
@@ -111,10 +142,6 @@ async def main():
 
                 if position_balance == 0:
                     await open_position_meteora(context, met_page)
-
-        # print('main() отработал')
-        # await asyncio.sleep(10000)
-        # await context.close()
 
 
 async def restartable_main():
